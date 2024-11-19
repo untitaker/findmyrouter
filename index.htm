@@ -28,7 +28,7 @@
         return new Promise((resolve, reject) => {
             const start = performance.now();
             try {
-                const ws = new WebSocket(`ws://${ipToString(i)}`);
+                const ws = new WebSocket(`${document.location.protocol.replace('http', 'ws')}//${ipToString(i)}`);
                 ws.onerror = () => {
                     const end = performance.now();
                     resolve(end - start < 100);
