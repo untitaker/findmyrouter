@@ -1,0 +1,82 @@
+<script>
+    ip = (a, b, c, d) => {
+        return d + (c << 8 >>> 0) + (b << 16 >>> 0) + (a << 24 >>> 0);
+    };
+
+    ipToString = (ip) => {
+        const a = (ip >> 24) & 255;
+        const b = (ip >> 16) & 255;
+        const c = (ip >> 8) & 255;
+        const d = ip & 255;
+        return `${a}.${b}.${c}.${d}`;
+    };
+
+    PRIVATE_IP_RANGES = [
+        [ip(10, 0, 0, 1), 8],
+        [ip(172, 16, 0, 1), 20],
+        [ip(192, 168, 0, 1), 16],
+    ];
+
+    function* generateIPRange(ip, bits) {
+        let maxIp = (ip | (((1 << bits) >>> 0) - 1)) >>> 0;
+        for (; ip <= maxIp; ip += 256) {
+            yield ip;
+        }
+    }
+
+    checkIp = (i) => {
+        return new Promise((resolve, reject) => {
+            const start = performance.now();
+            try {
+                const ws = new WebSocket(`ws://${ipToString(i)}`);
+                ws.onerror = () => {
+                    const end = performance.now();
+                    resolve(end - start < 100);
+                };
+                setTimeout(() => ws.close(), 200);
+            } catch(e) {
+                resolve(false);
+            }
+        });
+    };
+
+    function* generateAllIPRanges() {
+        const generators = PRIVATE_IP_RANGES.map(([ip, bits]) => generateIPRange(ip, bits));
+
+        while (true) {
+            let anyElem = false;
+            for (const generator of generators) {
+                const result = generator.next();
+                if (!result.done) {
+                    anyElem = true;
+                    yield result.value;
+                }
+            }
+
+            if (!anyElem) {
+                break;
+            }
+        }
+    }
+
+    startScan = async () => {
+        const statusElem = document.getElementById('status');
+        let count = 0;
+        for (const ip of generateAllIPRanges()) {
+            const ipText = ipToString(ip);
+            count += 1;
+            statusElem.innerText = `scanned ${count} IPs, currently: ${ipText}`;
+            const isValid = await checkIp(ip);
+            if (isValid) {
+                statusElem.innerHTML = `<strong style=color:green><a href=http://${ipText}>${ipText}</a> is most likely your routers web panel</strong>`;
+                break;
+            }
+        }
+    };
+</script>
+
+<h1>Where is my router's web panel?</h1>
+
+<p><button onclick=startScan()>Start scanning private IPs for my router</button></p>
+
+<p id=status></p>
